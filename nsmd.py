@@ -11,7 +11,8 @@
 #To-Do:
 #	Get gene information from genome file.
 
-import pysam
+import pysam #SAM/BAM files handling.
+from matplotlib import pyplot as plt #Plotting
 
 gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
 path = {"data":"../data/"} #Paths.
@@ -113,3 +114,28 @@ def gene_reads_compare(file1,file2,region,gene=None,ccount1=None,ccount2=None):
 
 	return ret
 
+def plot_read_comp(file1,file2,region):
+	"""
+	Given two files an a region, plots for each gene the fraction of total reads in that gene"
+
+	Red +  for the fraction in file 1, blue o for the fraction in file 2.
+
+	Note: the gene is plotted in the mid-point of each location.
+	"""
+
+	read_frac = gene_reads_compare(file1,file2,region)
+
+	xx = []
+	yy1 = []
+	yy2 = []
+
+	for gene in gene_loc:
+		xx.append((maxloc(gene)+minloc(gene))/2.)
+		yy1.append(read_frac[gene][0])
+		yy2.append(read_frac[gene][1])
+
+	plt.figure()
+	plt.plot(xx,yy1,"+",color="red")
+	plt.plot(xx,yy2,"o",color="blue")
+	plt.show(block=False)
+		  
