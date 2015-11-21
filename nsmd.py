@@ -9,7 +9,10 @@
 #	Amrita Ganpatial
 
 #To-Do:
+#	Gene location file including region (chromosome)
 #	Get gene information from genome file.
+#	Global cached file counts.
+#	Pysam version control. Now based in Pysam 0.6
 
 import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
@@ -77,15 +80,45 @@ def read_count(bamfile,region,gene=None):
 	else:
 		return samfile.count(region,minloc(gene),maxloc(gene))
 
-def gene_read_frac(bamfile,region,gene,cached_count=None):
+	samfile.close()
+
+
+
+def gene_read_frac(bamfile,region,gene=None,cached_count=None):
 	"""
 	Total reads in a gene over total reads in a region.
 	If cached_count is given, it is used as total reads in region.
+	If not gene, a mapping for all in gene_loc.
 	"""
 	if not cached_count:
 		cached_count = read_count(bamfile,region)
+	
+	if gene:
+		return float(read_count(bamfile,region,gene))/cached_count
 
-	return float(read_count(bamfile,region,gene))/cached_count
+	gene_frac = {}
+
+	for gene in gene_loc:
+		gene_frac[gene] = gene_read_frac(bamfile,region,gene,cached_count)
+
+	return gene_frac
+
+def gene_read_total(bamfile,region,gene=None):
+	"""
+	Total reads in a gene.
+	If not gene, a mapping for all in gene_loc.
+	"""
+	
+	if gene:
+		return read_count(bamfile,region,gene)
+
+	ret = {}
+
+	for gene in gene_loc:
+		ret[gene] = gene_read_total(bamfile,region,gene)
+
+	return ret 
+
 
 def gene_reads_compare(file1,file2,region,gene=None,ccount1=None,ccount2=None):
 	"""
@@ -110,7 +143,7 @@ def gene_reads_compare(file1,file2,region,gene=None,ccount1=None,ccount2=None):
 	#If gene not passed, do it for all genes.
 	ret = {}
 	for gene in gene_loc:
-		ret[gene] = (gene_read_frac(file1,region,gene,cached_count=ccount1),gene_read_frac(file2,region,gene,cached_count=ccount2))
+		ret[gene] = gene_reads_compare(file1,file2,region,gene,ccount1,ccount2) 
 
 	return ret
 
@@ -138,4 +171,197 @@ def plot_read_comp(file1,file2,region):
 	plt.plot(xx,yy1,"+",color="red")
 	plt.plot(xx,yy2,"o",color="blue")
 	plt.show(block=False)
-		  
+	
+def crit_frac_compare(file1,file2,region,gene=None,only=None,ccount1=None,ccount2=None):
+	"""
+	If not gene,
+	Returns a list of genes in gene_loc such that
+
+	The fraction (wrt total reads in region) of reads in the gene in file1 is smaller or equal than the fraction in file2.
+
+	Note: we expect that candidate genes in PCM will have in general more reads than in WT, once normalized wrt to total reads.
+	If gene, returns true if the criteria is true for that gene.	
+	If only, consider only genes in the list "only".
+	"""
+
+	if not ccount1:
+		ccount1 = read_count(file1,region)
+
+	if not ccount2:
+		ccount2 = read_count(file2,region)
+
+	if gene:
+		return gene_read_frac(file1,region,gene,cached_count=ccount1) <= gene_read_frac(file2,region,gene,cached_count=ccount2)
+
+	#If gene not passed, do it for all genes.
+	ret = [] 
+	for gene in gene_loc:
+		if not only or gene in only:		
+			if crit_frac_compare(file1,file2,region,gene,ccount1=ccount1,ccount2=ccount2):
+				ret.append(gene)
+
+	return ret
+
+def crit_min_reads(bamfile,region,gene=None,minreads=0,frac=False,only=None,ccount=None):
+	"""
+	Returns true if gene satisfies the following criteria.
+
+	The total number of reads is bigger or equal than minreads.
+
+	If frac, fractional number of reads over total in region is used.
+
+	If not gene, a returns a list of all the genes in gene_loc that satisfy the criterium. If only, only genes in only.
+	"""
+
+	if not gene and frac and not ccount:
+		ccount = read_count(bamfile,region)
+
+	if gene:
+		if frac:
+			return gene_read_frac(bamfile,region,gene,ccount) >= minreads
+
+		else:
+			return gene_read_total(bamfile,region,gene) >= minreads
+
+	ret = []
+
+	for gene in gene_loc:
+		if not only or gene in only:
+			if crit_min_reads(bamfile,region,gene,minreads,frac,only,ccount):
+				ret.append(gene)
+
+	return ret
+
+def is_expressed(bamfile,region,gene,region_length,alpha = 1.0,ccount=None):
+	"""
+	Returns True if gene satisfies:
+	
+	Reads in gene/(gene length) >= alpha* reads in region/(region length)
+	"""
+
+	if not ccount:
+		ccount = read_count(bamfile,region)
+
+	reads_in_gene = read_count(bamfile,region,gene)
+	gene_length = maxloc(gene)-minloc(gene)
+
+	return alpha*ccount/region_length <= float(reads_in_gene)/gene_length
+
+def crit_expressed(bamfile,region,gene=None,only=None,region_length=23513712,alpha=1.0,ccount=None):
+	"""
+	Returns True if gene is expressed with factor alpha.
+
+	If not gene, for all in gene_loc. If only, only if in only.
+
+	The default length is the length of 2L.
+	"""
+
+	if not ccount:
+		ccount = read_count(bamfile,region)
+
+	if gene:
+		return is_expressed(bamfile,region,gene,region_length,alpha,ccount)
+
+	ret = []
+	ct = 0
+	for gene in gene_loc:
+		if not only or gene in only:
+			if crit_expressed(bamfile,region,gene,only,region_length,alpha,ccount):
+				ret.append(gene)
+
+	return ret
+
+def get_pileup(bamfile,region,gene=None):
+	"""
+	Returns the counts for each location for all the reads that cover that location. 
+	"""
+	samfile = pysam.Samfile(full_path(bamfile,"data"))
+	if gene:
+		pileup = samfile.pileup(region,minloc(gene),maxloc(gene))
+	else:
+		pileup = samfile.pileup(region)
+
+	ret = []
+
+	for read in pileup:
+		ret.append(read.n)
+
+	samfile.close()
+	return ret
+
+def cmass(bamfile,region,gene,norm=False, ccount=None):
+	"""
+	Center of mass of the gene normalized pileup wrt total reads in region.
+
+	If norm, center of mass in [0,1] with respect to gene length.
+	"""
+
+	if not ccount:
+		ccount = read_count(bamfile,region)
+	
+	pileup = get_pileup(bamfile,region,gene)
+	norm_pileup = [float(p)/ccount for p in pileup]
+
+	s = sum(norm_pileup)
+
+	if s==0:
+		if norm:
+			return .5
+		else:
+			return (minloc(gene)+maxloc(gene))/2.
+		 
+
+	shift = minloc(gene) #pileup starts at 0, but minloc!=0 in general.
+
+	c = sum([loc*norm_pileup[loc-shift] for loc in range(minloc(gene),shift+len(norm_pileup))])/sum(norm_pileup)
+
+	if not norm:
+		return c
+	else:
+		return (c-shift)/(maxloc(gene)-minloc(gene))
+
+def cmass_diff(file1,file2,region,gene,norm=False,ccount1=None,ccount2=None):
+	"""
+	Return the difference of centers of mass between gene in file1 and gene in file2, c2-c1
+
+	if norm, normalized to 0,1 wrt gene length.
+	""" 		
+
+	if not ccount1:
+		ccount1 = read_count(file1,region)
+
+	if not ccount2:
+		ccount2 = read_count(file2,region)
+
+	c1 = cmass(file1,region,gene,norm,ccount1)
+	c2 = cmass(file2,region,gene,norm,ccount2)
+
+	return c2-c1
+
+def crit_cmass(file1,file2,region,gene=None,only=None,alpha=.1,ccount1=None,ccount2=None):
+	"""
+	Returns the gene satisfying the following criterium:
+
+	True if the normalized center of mass is displaced more than alpha.
+	If not gene, for all in gene_loc. If only, only genes in only.
+	"""
+	
+	if not ccount1:
+		ccount1 = read_count(file1,region)
+
+	if not ccount2:
+		ccount2 = read_count(file2,region)
+
+	if gene:
+		return abs(cmass_diff(file1,file2,region,gene,True,ccount1,ccount2)) >= alpha
+
+	ret = []
+	for gene in gene_loc:
+		if not only or gene in only:
+			if crit_cmass(file1,file2,region,gene,only,alpha,ccount1,ccount2):
+				ret.append(gene)
+	
+	return gene
+
+	
+		
