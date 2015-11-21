@@ -32,4 +32,17 @@ def read_gene_loc(datafile="geneloc.dat"):
 
 	f.close()
 			
+#Gene minloc and maxloc wrappers
+def minloc(gene):
+	"""
+	Returns the min location for the gene.	
+	Must be in the gene_loc dictionary.
+	"""
+	return gene_loc[gene][0]
 
+def maxloc(gene):
+	"""
+	Returns the max location for the gene.	
+	Must be in the gene_loc dictionary.
+	"""
+	return gene_loc[gene][1]
