@@ -16,9 +16,6 @@ import pysam
 gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
 path = {"data":"../data/"} #Paths.
 
-#Runs read_gene_loc to get locations from file.
-read_gene_loc()
-
 def set_path_data(path,path_type):
 	"""
 	Sets the path to the data directory.
@@ -46,7 +43,11 @@ def read_gene_loc(datafile="geneloc.dat"):
 		gene_loc[s[0]] = (int(s[1]),int(s[2]))
 
 	f.close()
-			
+	
+#Runs read_gene_loc to get locations from file.
+read_gene_loc()
+
+		
 #Gene minloc and maxloc wrappers
 def minloc(gene):
 	"""
@@ -84,4 +85,31 @@ def gene_read_frac(bamfile,region,gene,cached_count=None):
 		cached_count = read_count(bamfile,region)
 
 	return float(read_count(bamfile,region,gene))/cached_count
- 
+
+def gene_reads_compare(file1,file2,region,gene=None,ccount1=None,ccount2=None):
+	"""
+	Compares the proportion of reads in a gene from two different BAM files.
+
+	If not gene, returns a dictionary {gene:(frac1,frac2)} for all genes in geneloc.
+
+	If gene, returns the pair (frac1,frac2) for the gene.
+
+	Cached counts used if passed.
+	"""
+
+	if not ccount1:
+		ccount1 = read_count(file1,region)
+
+	if not ccount2:
+		ccount2 = read_count(file2,region)
+
+	if gene:
+		return (gene_read_frac(file1,region,gene,cached_count=ccount1),gene_read_frac(file2,region,gene,cached_count=ccount2))
+
+	#If gene not passed, do it for all genes.
+	ret = {}
+	for gene in gene_loc:
+		ret[gene] = (gene_read_frac(file1,region,gene,cached_count=ccount1),gene_read_frac(file2,region,gene,cached_count=ccount2))
+
+	return ret
+
