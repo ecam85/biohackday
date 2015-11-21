@@ -18,9 +18,9 @@ import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
 
 gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
-path = {"data":"../data/"} #Paths.
+path = {"data":"../data/","fig":"./fig/"} #Paths.
 
-def set_path_data(path,path_type):
+def set_path(path,path_type):
 	"""
 	Sets the path to the data directory.
 	"""
@@ -66,6 +66,16 @@ def maxloc(gene):
 	Must be in the gene_loc dictionary.
 	"""
 	return gene_loc[gene][1]
+
+def get_region_length(bamfile,region):
+	"""
+	Returns the length of the region
+	"""
+	sf = pysam.Samfile(full_path(bamfile))
+	ret = sf.lengths[sf.gettid(region)]
+	sf.close()
+
+	return ret
 
 #Read counting.
 def read_count(bamfile,region,gene=None):
@@ -232,7 +242,7 @@ def crit_min_reads(bamfile,region,gene=None,minreads=0,frac=False,only=None,ccou
 
 	return ret
 
-def is_expressed(bamfile,region,gene,region_length,alpha = 1.0,ccount=None):
+def is_expressed(bamfile,region,gene,region_length=None,alpha = 1.0,ccount=None):
 	"""
 	Returns True if gene satisfies:
 	
@@ -241,23 +251,28 @@ def is_expressed(bamfile,region,gene,region_length,alpha = 1.0,ccount=None):
 
 	if not ccount:
 		ccount = read_count(bamfile,region)
+	
+	if not region_length:
+		region_length = get_region_length(bamfile,region)
 
 	reads_in_gene = read_count(bamfile,region,gene)
 	gene_length = maxloc(gene)-minloc(gene)
+	
 
 	return alpha*ccount/region_length <= float(reads_in_gene)/gene_length
 
-def crit_expressed(bamfile,region,gene=None,only=None,region_length=23513712,alpha=1.0,ccount=None):
+def crit_expressed(bamfile,region,gene=None,only=None,region_length=None,alpha=1.0,ccount=None):
 	"""
 	Returns True if gene is expressed with factor alpha.
 
 	If not gene, for all in gene_loc. If only, only if in only.
-
-	The default length is the length of 2L.
 	"""
 
 	if not ccount:
 		ccount = read_count(bamfile,region)
+
+	if not region_length:
+		region_length=get_region_length(bamfile,region)
 
 	if gene:
 		return is_expressed(bamfile,region,gene,region_length,alpha,ccount)
@@ -271,20 +286,50 @@ def crit_expressed(bamfile,region,gene=None,only=None,region_length=23513712,alp
 
 	return ret
 
+#def get_pileup(bamfile,region,gene=None):
+#	"""
+#	NOTE: This is not doing what we expected!
+#	Returns the counts for each location for all the reads that cover that location. 
+#	"""
+#	samfile = pysam.Samfile(full_path(bamfile,"data"))
+#	if gene:
+#		pileup = samfile.pileup(region,minloc(gene),maxloc(gene))
+#	else:
+#		pileup = samfile.pileup(region)
+#
+#	ret = []
+#
+#	for read in pileup:
+#		ret.append(read.n)
+#
+#	samfile.close()
+#	return ret
+
 def get_pileup(bamfile,region,gene=None):
 	"""
 	Returns the counts for each location for all the reads that cover that location. 
+	Pileup by hand, not using pileup function.
 	"""
 	samfile = pysam.Samfile(full_path(bamfile,"data"))
 	if gene:
-		pileup = samfile.pileup(region,minloc(gene),maxloc(gene))
+		samiter = samfile.fetch(region,minloc(gene),maxloc(gene))
+		ret=[0]*(maxloc(gene)-minloc(gene)+200) #200 for safety reasons.
+		shift = minloc(gene)
 	else:
-		pileup = samfile.pileup(region)
+		samiter = samfile.fetch(region)
+		ret = [0]*(get_region_length(bamfile,region)+200)
+		shift = 0
 
-	ret = []
+	p = []
+	l = []
 
-	for read in pileup:
-		ret.append(read.n)
+	for read in samiter:
+		p.append(read.pos)
+		l.append(read.rlen)	
+
+	for i in range(len(p)):
+		for j in range(l[i]):
+			ret[p[i]-shift+j] += 1	
 
 	samfile.close()
 	return ret
@@ -361,7 +406,66 @@ def crit_cmass(file1,file2,region,gene=None,only=None,alpha=.1,ccount1=None,ccou
 			if crit_cmass(file1,file2,region,gene,only,alpha,ccount1,ccount2):
 				ret.append(gene)
 	
-	return ret 
+	return ret
 
+
+def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.jpg"): 
+	"""
+	Plots the pileup histogram for the given files.
+	If file2, for both files (file1 in red, file2 in blue).
+	If not gene, for the whole region.
+	If gene is a list, a figure for each gene.
+	
+	If show=False, save the result to test.jpg in the fig path.
+	If show=False and gene is a list, filename must be a list.
+	"""
+
+	pileup2 = None
+
+	if isinstance(filename,str):
+		filename = [filename]
+
+	#Get pileups.
+	if not gene:
+		pileup1 = get_pileup(file1,region)
+		if file2:
+			pileup2 = get_pileup(file2,region)
+	elif isinstance(gene,str):
+		pileup1 = get_pileup(file1,region,gene)
+		if file2:
+			pileup2=get_pileup(file2,region,gene)
+	else:
+		pileup1 = [get_pileup(file1,region,g) for g in gene]
+		if file2:
+			pileup2 = [get_pileup(file2,region,g) for g in gene]
+
+	#Plot
+
+	nfig = []
+	if not gene or isinstance(gene,str):
+		fig=plt.figure()
+		plt.plot(pileup1,color="red")
+		if pileup2:
+			plt.plot(pileup2,color="blue")
+		nfig.append(fig.number)
+	else:
+		for i in range(len(gene)):
+			fig=plt.figure()
+			plt.plot(pileup1,color="red")
+			if pileup2:
+				plt.plot(pileup2,color="blue")
+			nfig.append(fig.number)
+
+	#Show or save
+	if show:
+		plt.show(block=False)
+	else:
+		for i in range(len(gene)):
+			plt.figure(nfig[i])
+			fig.savefig(full_path(filename[i],"fig"))
+
+
+			
+		
 	
 		
