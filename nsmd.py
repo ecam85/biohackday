@@ -361,7 +361,7 @@ def crit_cmass(file1,file2,region,gene=None,only=None,alpha=.1,ccount1=None,ccou
 			if crit_cmass(file1,file2,region,gene,only,alpha,ccount1,ccount2):
 				ret.append(gene)
 	
-	return gene
+	return ret 
 
 	
 		
