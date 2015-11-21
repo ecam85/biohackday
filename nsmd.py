@@ -1,7 +1,7 @@
 #A set of tools to study Non-sense mediated decay
 #Project started at MPS Hack Day 2015 (20/11/2015)
 
-gene_locations = {} #Dictionary {gen_id: (minpos,maxpos)}
+gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
 path = {"data":"..data/"} #Paths.
 
 def set_path_data(path,path_type):
@@ -17,13 +17,19 @@ def full_path(name,path_type):
 	return path[path_type]+name
 	
 
-def read_gene_locations(datafile="geneloc.dat"):
+def read_gene_loc(datafile="geneloc.dat"):
 	"""
 	Reads the gene positions from a data file.
 	Format of data file:
 	Gene_id\tminpos\tmaxpos
 	"""
+	
+	f = open(full_path(datafile,"data"),"r")
 
+	for line in f:
+		s = line.rsplit()
+		gene_loc[s[0]] = (s[1],s[2])
+
+	f.close()
 			
-
 
