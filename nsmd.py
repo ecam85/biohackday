@@ -13,12 +13,13 @@
 #	Get gene information from genome file.
 #	Global cached file counts.
 #	Pysam version control. Now based in Pysam 0.6
+#	Criterium wrapper - all crit_* functions share structure.
 
 import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
 
 gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
-path = {"data":"../data/","fig":"./fig/"} #Paths.
+path = {"data":"./data/","fig":"./fig/"} #Paths.
 
 def set_path(path,path_type):
 	"""
