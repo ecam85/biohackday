@@ -490,10 +490,10 @@ def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.
 	if show:
 		plt.show(block=False)
 	else:
-		for i in range(len(gene)):
+		for i in range(len(nfig)):
 			fig=plt.figure(nfig[i])
 			fig.savefig(full_path(filename[i],"fig"))
-			plt.close(nfig[i])
+			plt.close(fig)
 
 
 			
