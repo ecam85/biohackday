@@ -19,7 +19,7 @@ import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
 
 gene_loc = {} #Dictionary {gen_id: (minpos,maxpos)}
-path = {"data":"./data/","fig":"./fig/"} #Paths.
+path = {"data":"./data/","fig":"./fig/","results":"./results/"} #Paths.
 
 def set_path(path,path_type):
 	"""
@@ -72,7 +72,7 @@ def get_region_length(bamfile,region):
 	"""
 	Returns the length of the region
 	"""
-	sf = pysam.Samfile(full_path(bamfile))
+	sf = pysam.Samfile(full_path(bamfile,"data"))
 	ret = sf.lengths[sf.gettid(region)]
 	sf.close()
 
@@ -158,13 +158,15 @@ def gene_reads_compare(file1,file2,region,gene=None,ccount1=None,ccount2=None):
 
 	return ret
 
-def plot_read_comp(file1,file2,region):
+def plot_read_comp(file1,file2,region,show=True,filename="test.jpg"):
 	"""
 	Given two files an a region, plots for each gene the fraction of total reads in that gene"
 
 	Red +  for the fraction in file 1, blue o for the fraction in file 2.
 
 	Note: the gene is plotted in the mid-point of each location.
+
+	If not show, save plot to file.
 	"""
 
 	read_frac = gene_reads_compare(file1,file2,region)
@@ -178,10 +180,14 @@ def plot_read_comp(file1,file2,region):
 		yy1.append(read_frac[gene][0])
 		yy2.append(read_frac[gene][1])
 
-	plt.figure()
+	fig=plt.figure()
 	plt.plot(xx,yy1,"+",color="red")
 	plt.plot(xx,yy2,"o",color="blue")
-	plt.show(block=False)
+	if not show:
+		fig.savefig(full_path(filename,"fig"))
+		plt.close(fig)
+	else:
+		plt.show(block=False)
 	
 def crit_frac_compare(file1,file2,region,gene=None,only=None,ccount1=None,ccount2=None):
 	"""
@@ -330,7 +336,9 @@ def get_pileup(bamfile,region,gene=None):
 
 	for i in range(len(p)):
 		for j in range(l[i]):
-			ret[p[i]-shift+j] += 1	
+			k = p[i]-shift+j
+			if k>=0 and k< len(ret):
+				ret[k] += 1	
 
 	samfile.close()
 	return ret
@@ -409,8 +417,13 @@ def crit_cmass(file1,file2,region,gene=None,only=None,alpha=.1,ccount1=None,ccou
 	
 	return ret
 
+def get_norm_pileup(pileup,counts):
+	"""
+	Normalizes a pileup wrt counts.
+	"""
+	return [float(p)/counts for p in pileup]
 
-def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.jpg"): 
+def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.jpg",norm=False,ccount1=None,ccount2=None): 
 	"""
 	Plots the pileup histogram for the given files.
 	If file2, for both files (file1 in red, file2 in blue).
@@ -440,8 +453,24 @@ def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.
 		if file2:
 			pileup2 = [get_pileup(file2,region,g) for g in gene]
 
-	#Plot
+	#Normalization
+	if norm:
+		if not ccount1:
+			ccount1 = read_count(file1,region)
+		if file2 and not ccount2:
+			ccount2 = read_count(file2,region)
 
+		if not gene or isinstance(gene,str):
+			pileup1 = get_norm_pileup(pileup1,ccount1)
+			if pileup2:
+				pileup2 = get_norm_pileup(pileup2,ccount2)
+
+		else:
+			pileup1 = [get_norm_pileup(p,ccount1) for p in pileup1]
+			if pileup2:
+				pileup2 = [get_norm_pileup(p,ccount2) for p in pileup2]
+
+	#Plot
 	nfig = []
 	if not gene or isinstance(gene,str):
 		fig=plt.figure()
@@ -452,9 +481,9 @@ def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.
 	else:
 		for i in range(len(gene)):
 			fig=plt.figure()
-			plt.plot(pileup1,color="red")
+			plt.plot(pileup1[i],color="red")
 			if pileup2:
-				plt.plot(pileup2,color="blue")
+				plt.plot(pileup2[i],color="blue")
 			nfig.append(fig.number)
 
 	#Show or save
@@ -462,8 +491,9 @@ def plot_pileup(file1,file2=None,region="2L",gene=None,show=True,filename="test.
 		plt.show(block=False)
 	else:
 		for i in range(len(gene)):
-			plt.figure(nfig[i])
+			fig=plt.figure(nfig[i])
 			fig.savefig(full_path(filename[i],"fig"))
+			plt.close(nfig[i])
 
 
 			
