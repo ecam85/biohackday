@@ -14,6 +14,9 @@
 #	Global cached file counts.
 #	Pysam version control. Now based in Pysam 0.6
 #	Criterium wrapper - all crit_* functions share structure.
+#	Gene location file including direction - new criteria: displacement to the right end.
+#	Normalisation wrt total bases read, not total reads.
+#	Visualisation: scales, titles, legends...	
 
 import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
