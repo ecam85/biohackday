@@ -9,3 +9,6 @@
 *.bam.bai
 *.sam
 *.sam.sai
+
+#GFF files. Too large.
+*.gff

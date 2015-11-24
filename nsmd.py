@@ -11,12 +11,19 @@
 #To-Do:
 #	Gene location file including region (chromosome)
 #	Get gene information from genome file.
+#	Gene location file including direction - new criteria: displacement to the right end.
+#	Extract all information from GFF file?
 #	Global cached file counts.
 #	Pysam version control. Now based in Pysam 0.6
 #	Criterium wrapper - all crit_* functions share structure.
-#	Gene location file including direction - new criteria: displacement to the right end.
 #	Normalisation wrt total bases read, not total reads.
 #	Visualisation: scales, titles, legends...	
+#	Dealing with overlapping:
+#		-Check for overlapping from gene locations.
+#		-Check neighbouring genes expression
+#		-Compensate extra expression due to overlaping.
+#	Parallelisation: for batch gene processing, i.e. processing lists of genes,
+#		split them between processes.
 
 import pysam #SAM/BAM files handling.
 from matplotlib import pyplot as plt #Plotting
